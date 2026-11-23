@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hardware, Device Manager &amp; Task Manager Monitor</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --surface: #111827;
+    --surface-2: #1a2335;
+    --border: #263248;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --err-bg: rgba(239, 68, 68, 0.14);
+    --ok-bg: rgba(34, 197, 94, 0.14);
+    --warn-bg: rgba(245, 158, 11, 0.14);
+    --info-bg: rgba(56, 189, 248, 0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(11, 17, 32, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .brand h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand .meta { font-size: 12px; color: var(--muted); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab-btn {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); border-color: var(--accent); }
+  .tab-btn.active {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: #0284c7; border-color: #0284c7; color: #fff; }
+  .btn.primary:hover { background: #0369a1; }
+  .btn:disabled { opacity: 0.55; cursor: wait; }
+
+  main { max-width: 1440px; margin: 0 auto; padding: 18px 20px 40px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .kpi .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+  .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; word-break: break-word; }
+  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .b-err { background: var(--err-bg); color: var(--err); }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .b-info { background: var(--info-bg); color: var(--accent); }
+  .b-muted { background: rgba(148,163,184,0.14); color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    color: var(--muted);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--accent); }
+  tr:last-child td { border-bottom: none; }
+  tr.row-err { background: rgba(239, 68, 68, 0.08); }
+  .mono { font-family: Consolas, "Cascadia Code", monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .input, select {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+  }
+  .input:focus, select:focus { border-color: var(--accent); }
+  .input.grow { flex: 1; min-width: 220px; }
+
+  details.dm-cat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  details.dm-cat summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface-2);
+    list-style: none;
+  }
+  details.dm-cat summary::-webkit-details-marker { display: none; }
+  .dm-table-wrap { overflow-x: auto; }
+
+  .bar-wrap {
+    width: 100%;
+    height: 8px;
+    background: var(--surface-2);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+  .bar-fill.warn { background: var(--warn); }
+  .bar-fill.err { background: var(--err); }
+
+  .chart-box { width: 100%; height: 90px; margin-top: 8px; }
+  svg.spark { width: 100%; height: 100%; display: block; }
+
+  .warn-banner {
+    background: var(--warn-bg);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fde68a;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    margin-bottom: 14px;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; }
+    header .tabs, header .actions, .toolbar, #tab-taskmanager { display: none !important; }
+    .panel { display: block !important; }
+    .card, .kpi, details.dm-cat { border-color: #ccc; background: #fff; break-inside: avoid; }
+    .mono { color: #333; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>PC Hardware, Device Manager &amp; Task Manager</h1>
+    <div class="meta" id="header-meta">Memuat data hardware...</div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="overview">Overview &amp; Hardware</button>
+    <button class="tab-btn" data-tab="devmgr">Device Manager <span class="badge b-muted" id="dm-err-badge">0</span></button>
+    <button class="tab-btn" data-tab="taskmgr">Live Task Manager</button>
+    <button class="tab-btn" data-tab="optimize">Optimize &amp; Debloat</button>
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="btn-rescan">Scan Ulang</button>
+    <button class="btn" id="btn-export">Export JSON</button>
+    <button class="btn" id="btn-print">Print Report</button>
+  </div>
+</header>
+
+<main>
+  <div id="warn-area"></div>
+
+  <!-- TAB 1: OVERVIEW & HARDWARE -->
+  <section id="tab-overview" class="panel active">
+    <div class="kpi-grid" id="hw-kpis"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Prosesor (CPU)</h2>
+        <div id="cpu-body"></div>
+      </div>
+      <div class="card">
+        <h2>VGA / Graphics Card (iGPU &amp; Dedicated)</h2>
+        <div id="gpu-body"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>LAN / Network Card Fisik</h2>
+        <div id="lan-body"></div>
+      </div>
+      <div class="card">
+        <h2>Port Layar &amp; Status HDMI</h2>
+        <div id="hdmi-body"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>USB-A Controllers (USB 3.0 vs 2.0) &amp; Perangkat Tercolok</h2>
+      <div id="usb-body"></div>
+    </div>
+  </section>
+
+  <!-- TAB 2: DEVICE MANAGER -->
+  <section id="tab-devmgr" class="panel">
+    <div class="toolbar">
+      <input type="text" id="dm-search" class="input grow" placeholder="Cari nama perangkat, manufacturer, DeviceID, atau class..." />
+      <select id="dm-category">
+        <option value="">Semua Kategori</option>
+      </select>
+      <button class="btn" id="dm-only-err">Hanya Error (0)</button>
+      <button class="btn" id="dm-expand-all">Buka Semua</button>
+    </div>
+    <div id="dm-stats" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;"></div>
+    <div id="dm-list"></div>
+  </section>
+
+  <!-- TAB 3: LIVE TASK MANAGER -->
+  <section id="tab-taskmgr" class="panel">
+    <div class="toolbar" style="justify-content:space-between;">
+      <div style="font-size:13px;color:var(--muted);" id="tm-status">Polling setiap 1.5 detik...</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn" id="tm-toggle">Pause Polling</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="tm-kpis"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Disk &amp; Storage</h2>
+        <div id="tm-disks"></div>
+      </div>
+      <div class="card">
+        <h2>Network Interfaces (Live)</h2>
+        <div id="tm-nets"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span>Top Processes</span>
+        <input type="text" id="proc-search" class="input" placeholder="Filter nama/PID proses..." style="font-weight:400;width:240px;" />
+      </h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="pid">PID</th>
+              <th class="sortable" data-sort="name">Nama Proses</th>
+              <th class="sortable" data-sort="cpu">CPU %</th>
+              <th class="sortable" data-sort="mem">Memory (MB)</th>
+            </tr>
+          </thead>
+          <tbody id="tm-procs"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: OPTIMIZE & DEBLOAT -->
+  <section id="tab-optimize" class="panel">
+    <div id="opt-toast" style="display:none;margin-bottom:14px;"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>
+          <span>Safe Windows Debloat (HKCU)</span>
+          <button class="btn" id="btn-opt-refresh">Refresh</button>
+        </h2>
+        <div id="opt-tweaks"></div>
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <strong>Bersihkan Folder %TEMP%</strong>
+            <div class="mono" id="opt-temp-info">Menghitung ukuran %TEMP%...</div>
+          </div>
+          <button class="btn primary" id="btn-clean-temp">Bersihkan %TEMP%</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Startup Manager (HKCU\...\Run)</h2>
+        <div id="opt-startup-list" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span>Process Group Killer (Hemat RAM Instan)</span>
+        <span class="mono" style="font-weight:400;">Proses inti OS dilindungi otomatis</span>
+      </h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Nama Grup Proses</th>
+              <th>Jumlah</th>
+              <th>CPU %</th>
+              <th>Total RAM</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="opt-proc-groups"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SESSION_TOKEN = "__HW_MONITOR_TOKEN__";
+  let hwData = null;
+  let tmData = null;
+  let optData = null;
+  let dmOnlyErr = false;
+  let dmExpandAll = false;
+  let tmPaused = false;
+  let tmTimer = null;
+  let procSort = { key: 'cpu', dir: 'desc' };
+
+  const hist = {
+    cpu: Array(40).fill(0),
+    mem: Array(40).fill(0),
+    netDown: Array(40).fill(0),
+    netUp: Array(40).fill(0),
+  };
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+
+  function fmtBytes(b) {
+    if (!b || b <= 0) return '0 B';
+    const u = ['B','KB','MB','GB','TB'];
+    const i = Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
+    return (b / Math.pow(1024, i)).toFixed(i >= 2 ? 2 : 0) + ' ' + u[i];
+  }
+
+  function fmtRate(bps) {
+    if (!bps || bps < 1) return '0 B/s';
+    const u = ['B/s','KB/s','MB/s','GB/s'];
+    const i = Math.min(u.length - 1, Math.floor(Math.log(bps) / Math.log(1024)));
+    return (bps / Math.pow(1024, i)).toFixed(i >= 2 ? 2 : 1) + ' ' + u[i];
+  }
+
+  function fmtUptime(sec) {
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return (d ? `${d}h ` : '') + `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function sparkSvg(arr, maxVal, color) {
+    const w = 300, h = 80;
+    const max = Math.max(maxVal || 100, ...arr, 1);
+    const pts = arr.map((v, i) => {
+      const x = (i / (arr.length - 1)) * w;
+      const y = h - (Math.min(v, max) / max) * (h - 6) - 3;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const area = `0,${h} ${pts.join(' ')} ${w},${h}`;
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polygon points="${area}" fill="${color}" fill-opacity="0.18"></polygon>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2"></polyline>
+    </svg>`;
+  }
+
+  // Tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  async function loadHardware(rescan = false) {
+    const btn = document.getElementById('btn-rescan');
+    btn.disabled = true;
+    btn.textContent = rescan ? 'Memindai...' : 'Memuat...';
+    try {
+      const res = await fetch(rescan ? '/api/hardware?rescan=1' : '/api/hardware');
+      hwData = await res.json();
+      renderHardware();
+    } catch (e) {
+      document.getElementById('warn-area').innerHTML =
+        `<div class="warn-banner">Gagal memuat data hardware: ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Scan Ulang';
+    }
+  }
+
+  function renderHardware() {
+    if (!hwData) return;
+    const dt = new Date((hwData.scanned_at_unix || 0) * 1000);
+    document.getElementById('header-meta').textContent =
+      `Host: ${hwData.hostname} | Scan: ${dt.toLocaleTimeString('id-ID')} (${hwData.scan_duration_ms} ms)`;
+
+    const warnArea = document.getElementById('warn-area');
+    warnArea.innerHTML = (hwData.warnings && hwData.warnings.length)
+      ? `<div class="warn-banner"><strong>Catatan WMI:</strong> ${hwData.warnings.map(esc).join(' | ')}</div>`
+      : '';
+
+    // KPIs
+    const cpu0 = hwData.cpu[0];
+    const igpuCount = hwData.gpus.filter(g => g.kind === 'iGPU').length;
+    const dgpuCount = hwData.gpus.filter(g => g.kind === 'dGPU').length;
+    const lanList = hwData.network_adapters.filter(n => n.adapter_type === 'Ethernet/LAN');
+    const lanConnected = lanList.some(n => n.cable_connected);
+    const hdmi = hwData.display_outputs;
+    const usb = hwData.usb;
+    const dm = hwData.device_manager;
+
+    document.getElementById('hw-kpis').innerHTML = `
+      <div class="kpi">
+        <div class="label">CPU</div>
+        <div class="val">${cpu0 ? `${cpu0.physical_cores}C / ${cpu0.logical_threads}T` : '-'}</div>
+        <div class="sub">${cpu0 ? esc(cpu0.name) : 'Tidak terdeteksi'}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">VGA / GPU</div>
+        <div class="val">${hwData.gpus.length} Unit</div>
+        <div class="sub">iGPU: ${igpuCount} &bull; Dedicated: ${dgpuCount}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Port LAN</div>
+        <div class="val">${lanConnected ? '<span class="badge b-ok">Tersambung</span>' : '<span class="badge b-warn">Putus / Kosong</span>'}</div>
+        <div class="sub">${lanList.length ? esc(lanList[0].speed_display) : 'Tidak ada adaptor LAN'}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Port HDMI</div>
+        <div class="val">${!hdmi.wmi_available ? '<span class="badge b-muted">N/A (VM/Driver)</span>' : (hdmi.hdmi_connected ? '<span class="badge b-ok">Dipakai (' + hdmi.hdmi_active_count + ')</span>' : '<span class="badge b-muted">Kosong</span>')}</div>
+        <div class="sub">Total output aktif: ${hdmi.active_output_count}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">USB-A Aktif</div>
+        <div class="val">3.0: ${usb.usb3_active_devices} &bull; 2.0: ${usb.usb2_active_devices}</div>
+        <div class="sub">Controller xHCI: ${usb.usb3_controller_count} &bull; EHCI: ${usb.usb2_controller_count}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Device Manager</div>
+        <div class="val">${dm.total_devices} Device</div>
+        <div class="sub">${dm.error_count > 0 ? `<span class="badge b-err">${dm.error_count} Error</span>` : '<span class="badge b-ok">Semua OK</span>'}</div>
+      </div>
+    `;
+
+    // CPU
+    document.getElementById('cpu-body').innerHTML = hwData.cpu.length
+      ? `<table><thead><tr><th>Model</th><th>Cores / Threads</th><th>Base Clock</th><th>Status</th></tr></thead><tbody>` +
+        hwData.cpu.map(c => `<tr>
+          <td><strong>${esc(c.name)}</strong><div class="mono">${esc(c.manufacturer)}</div></td>
+          <td>${c.physical_cores} Core / ${c.logical_threads} Thread</td>
+          <td>${c.base_clock_mhz} MHz</td>
+          <td><span class="badge b-ok">${esc(c.status)}</span></td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada data CPU.</div>';
+
+    // GPU
+    document.getElementById('gpu-body').innerHTML = hwData.gpus.length
+      ? `<table><thead><tr><th>GPU</th><th>Tipe</th><th>VRAM</th><th>Driver</th><th>Status</th></tr></thead><tbody>` +
+        hwData.gpus.map(g => `<tr class="${g.ok ? '' : 'row-err'}">
+          <td><strong>${esc(g.name)}</strong><div class="mono">${esc(g.vendor)}</div></td>
+          <td><span class="badge ${g.is_dedicated ? 'b-info' : 'b-muted'}">${esc(g.kind)}</span></td>
+          <td>${esc(g.vram_display)}</td>
+          <td class="mono">${esc(g.driver_version)}</td>
+          <td><span class="badge ${g.ok ? 'b-ok' : 'b-err'}">${esc(g.status)}</span></td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada GPU terdeteksi.</div>';
+
+    // LAN
+    document.getElementById('lan-body').innerHTML = hwData.network_adapters.length
+      ? `<table><thead><tr><th>Adaptor</th><th>Tipe</th><th>Link Speed</th><th>Status</th></tr></thead><tbody>` +
+        hwData.network_adapters.map(n => `<tr>
+          <td><strong>${esc(n.name)}</strong><div class="mono">${esc(n.connection_id)} &bull; ${esc(n.mac_address)}</div></td>
+          <td><span class="badge b-muted">${esc(n.adapter_type)}</span></td>
+          <td>${esc(n.speed_display)}</td>
+          <td><span class="badge ${n.cable_connected ? 'b-ok' : 'b-warn'}">${esc(n.connection_status)}</span></td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada adaptor jaringan fisik.</div>';
+
+    // HDMI / Display outputs
+    document.getElementById('hdmi-body').innerHTML = !hdmi.wmi_available
+      ? `<div class="mono">Namespace <code>root\\wmi</code> (WmiMonitorConnectionParams) tidak tersedia di perangkat/VM ini.</div>`
+      : (hdmi.outputs.length
+          ? `<table><thead><tr><th>Tipe Output</th><th>Instance</th><th>Status</th></tr></thead><tbody>` +
+            hdmi.outputs.map(o => `<tr>
+              <td><strong>${esc(o.technology)}</strong> ${o.is_hdmi ? '<span class="badge b-info">HDMI</span>' : ''}</td>
+              <td class="mono">${esc(o.instance_name)}</td>
+              <td><span class="badge ${o.active ? 'b-ok' : 'b-muted'}">${o.active ? 'Aktif / Terpasang' : 'Tidak Aktif'}</span></td>
+            </tr>`).join('') + `</tbody></table>`
+          : '<div class="mono">Tidak ada output monitor aktif terdeteksi.</div>');
+
+    // USB
+    const ctrlHtml = usb.controllers.length
+      ? `<div style="margin-bottom:12px;"><strong>USB Host Controllers:</strong><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">` +
+        usb.controllers.map(c => `<span class="badge ${c.usb_version === 'USB 3.0' ? 'b-info' : 'b-muted'}">${esc(c.usb_version)}: ${esc(c.name)}</span>`).join('') +
+        `</div></div>`
+      : '';
+
+    const devRows = usb.devices.filter(d => !d.is_hub);
+    const devHtml = devRows.length
+      ? `<table><thead><tr><th>Perangkat USB Tercolok</th><th>Versi</th><th>Controller</th><th>Status</th></tr></thead><tbody>` +
+        devRows.map(d => `<tr class="${d.ok ? '' : 'row-err'}">
+          <td><strong>${esc(d.name)}</strong><div class="mono">${esc(d.manufacturer)} &bull; ${esc(d.device_id)}</div></td>
+          <td><span class="badge ${d.usb_version === 'USB 3.0' ? 'b-info' : 'b-muted'}">${esc(d.usb_version)}</span></td>
+          <td class="mono">${esc(d.controller_name)}</td>
+          <td><span class="badge ${d.ok ? 'b-ok' : 'b-err'}">${esc(d.status)}</span></td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada perangkat USB non-hub tercolok.</div>';
+
+    document.getElementById('usb-body').innerHTML = ctrlHtml + devHtml;
+
+    // Device Manager controls & list
+    const dmErrBadge = document.getElementById('dm-err-badge');
+    dmErrBadge.textContent = dm.error_count;
+    dmErrBadge.className = 'badge ' + (dm.error_count > 0 ? 'b-err' : 'b-ok');
+    document.getElementById('dm-only-err').textContent = `Hanya Error (${dm.error_count})`;
+
+    const sel = document.getElementById('dm-category');
+    const prevSel = sel.value;
+    sel.innerHTML = `<option value="">Semua Kategori (${dm.categories.length})</option>` +
+      dm.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)} (${c.total}${c.error_count ? `, ${c.error_count} err` : ''})</option>`).join('');
+    sel.value = prevSel;
+
+    renderDeviceManager();
+  }
+
+  function renderDeviceManager() {
+    if (!hwData) return;
+    const q = document.getElementById('dm-search').value.trim().toLowerCase();
+    const catFilter = document.getElementById('dm-category').value;
+    const categories = hwData.device_manager.categories || [];
+
+    let shownCount = 0;
+    let shownErr = 0;
+    const htmlParts = [];
+
+    for (const cat of categories) {
+      if (catFilter && cat.name !== catFilter) continue;
+      const items = cat.devices.filter(d => {
+        if (dmOnlyErr && d.ok) return false;
+        if (!q) return true;
+        return d.name.toLowerCase().includes(q)
+          || d.manufacturer.toLowerCase().includes(q)
+          || d.device_id.toLowerCase().includes(q)
+          || d.pnp_class.toLowerCase().includes(q);
+      });
+      if (!items.length) continue;
+
+      shownCount += items.length;
+      const catErr = items.filter(d => !d.ok).length;
+      shownErr += catErr;
+      const shouldOpen = dmExpandAll || dmOnlyErr || q.length > 0 || catErr > 0;
+
+      htmlParts.push(`<details class="dm-cat" ${shouldOpen ? 'open' : ''}>
+        <summary>
+          <span>${esc(cat.name)} <span class="badge b-muted">${items.length}</span></span>
+          <span>${catErr > 0 ? `<span class="badge b-err">${catErr} Error</span>` : '<span class="badge b-ok">OK</span>'}</span>
+        </summary>
+        <div class="dm-table-wrap">
+          <table>
+            <thead><tr><th>Nama Perangkat</th><th>Manufacturer</th><th>Device ID</th><th>Status</th></tr></thead>
+            <tbody>
+              ${items.map(d => `<tr class="${d.ok ? '' : 'row-err'}">
+                <td><strong>${esc(d.name)}</strong></td>
+                <td>${esc(d.manufacturer)}</td>
+                <td class="mono">${esc(d.device_id)}</td>
+                <td><span class="badge ${d.ok ? 'b-ok' : 'b-err'}">${esc(d.status)}${!d.ok ? ' - ' + esc(d.error_label) : ''}</span></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>`);
+    }
+
+    document.getElementById('dm-stats').textContent =
+      `Menampilkan ${shownCount} perangkat (${shownErr} error) dari total ${hwData.device_manager.total_devices} perangkat.`;
+    document.getElementById('dm-list').innerHTML = htmlParts.length
+      ? htmlParts.join('')
+      : '<div class="card"><div class="mono">Tidak ada perangkat yang cocok dengan filter.</div></div>';
+  }
+
+  async function pollTaskManager() {
+    if (tmPaused) return;
+    try {
+      const res = await fetch('/api/taskmanager');
+      tmData = await res.json();
+      renderTaskManager();
+      document.getElementById('tm-status').textContent =
+        `Live update aktif (1.5s) • Total Proses: ${tmData.process_count} • Uptime: ${fmtUptime(tmData.uptime_secs)}`;
+    } catch (e) {
+      document.getElementById('tm-status').textContent = `Polling error: ${e.message}`;
+    }
+  }
+
+  function renderTaskManager() {
+    if (!tmData) return;
+    const cpuPct = tmData.cpu.usage_percent || 0;
+    const memPct = tmData.memory.usage_percent || 0;
+
+    hist.cpu.push(cpuPct); hist.cpu.shift();
+    hist.mem.push(memPct); hist.mem.shift();
+    hist.netDown.push(tmData.total_rx_bytes_per_sec / 1024); hist.netDown.shift();
+    hist.netUp.push(tmData.total_tx_bytes_per_sec / 1024); hist.netUp.shift();
+
+    document.getElementById('tm-kpis').innerHTML = `
+      <div class="kpi">
+        <div class="label">CPU Usage</div>
+        <div class="val">${cpuPct.toFixed(1)}%</div>
+        <div class="sub">${tmData.cpu.frequency_mhz} MHz &bull; ${tmData.cpu.logical_cores} Logical Cores</div>
+        <div class="chart-box">${sparkSvg(hist.cpu, 100, '#38bdf8')}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Memory (RAM)</div>
+        <div class="val">${memPct.toFixed(1)}%</div>
+        <div class="sub">${fmtBytes(tmData.memory.used_bytes)} / ${fmtBytes(tmData.memory.total_bytes)} (Sisa ${fmtBytes(tmData.memory.available_bytes)})</div>
+        <div class="chart-box">${sparkSvg(hist.mem, 100, '#818cf8')}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Network Traffic</div>
+        <div class="val">&darr; ${fmtRate(tmData.total_rx_bytes_per_sec)}</div>
+        <div class="sub">&uarr; Upload: ${fmtRate(tmData.total_tx_bytes_per_sec)}</div>
+        <div class="chart-box">${sparkSvg(hist.netDown, 10, '#22c55e')}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Disk I/O</div>
+        <div class="val">R: ${fmtRate(tmData.total_disk_read_bytes_per_sec)}</div>
+        <div class="sub">W: ${fmtRate(tmData.total_disk_write_bytes_per_sec)}</div>
+      </div>
+    `;
+
+    document.getElementById('tm-disks').innerHTML = tmData.disks.length
+      ? tmData.disks.map(d => {
+          const cls = d.usage_percent > 90 ? 'err' : (d.usage_percent > 75 ? 'warn' : '');
+          return `<div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;">
+              <strong>${esc(d.mount_point)} ${d.name ? '(' + esc(d.name) + ')' : ''} <span class="mono">${esc(d.file_system)}</span></strong>
+              <span>${fmtBytes(d.used_bytes)} / ${fmtBytes(d.total_bytes)} (${d.usage_percent.toFixed(1)}%)</span>
+            </div>
+            <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${Math.min(100, d.usage_percent).toFixed(1)}%"></div></div>
+            <div class="mono" style="margin-top:4px;">Sisa: ${fmtBytes(d.available_bytes)} &bull; Read: ${fmtRate(d.read_bytes_per_sec)} &bull; Write: ${fmtRate(d.write_bytes_per_sec)}</div>
+          </div>`;
+        }).join('')
+      : '<div class="mono">Tidak ada drive terdeteksi.</div>';
+
+    document.getElementById('tm-nets').innerHTML = tmData.networks.length
+      ? `<table><thead><tr><th>Interface</th><th>Download (&darr;)</th><th>Upload (&uarr;)</th></tr></thead><tbody>` +
+        tmData.networks.map(n => `<tr>
+          <td><strong>${esc(n.name)}</strong></td>
+          <td>${fmtRate(n.rx_bytes_per_sec)}</td>
+          <td>${fmtRate(n.tx_bytes_per_sec)}</td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada interface aktif.</div>';
+
+    renderProcesses();
+    renderProcessGroups();
+  }
+
+  function showOptToast(msg, isErr = false) {
+    const el = document.getElementById('opt-toast');
+    el.style.display = 'block';
+    el.className = isErr ? 'warn-banner' : 'card';
+    el.style.borderColor = isErr ? 'rgba(239,68,68,0.45)' : 'rgba(34,197,94,0.45)';
+    el.style.background = isErr ? 'var(--err-bg)' : 'var(--ok-bg)';
+    el.style.color = isErr ? '#fecaca' : '#bbf7d0';
+    el.style.padding = '10px 14px';
+    el.textContent = msg;
+  }
+
+  async function postOptimize(url, payload = {}) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': SESSION_TOKEN,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  async function loadOptimizeStatus() {
+    try {
+      const res = await fetch('/api/optimize/status');
+      optData = await res.json();
+      renderOptimize();
+    } catch (e) {
+      showOptToast('Gagal memuat status Optimize: ' + e.message, true);
+    }
+  }
+
+  function renderOptimize() {
+    if (!optData) return;
+    document.getElementById('opt-temp-info').textContent =
+      `${optData.temp_dir} (${fmtBytes(optData.temp_size_bytes)})`;
+
+    document.getElementById('opt-tweaks').innerHTML = (optData.tweaks || []).map(t => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <strong>${esc(t.title)}</strong>
+          <div class="mono" style="margin-top:2px;">${esc(t.description)}</div>
+        </div>
+        <button class="btn ${t.optimized ? 'primary' : ''}" data-tweak-id="${esc(t.id)}" data-next="${!t.optimized}">
+          ${t.optimized ? 'Aktif (Optimal)' : 'Nonaktif'}
+        </button>
+      </div>
+    `).join('');
+
+    document.querySelectorAll('[data-tweak-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.tweakId;
+        const optimized = btn.dataset.next === 'true';
+        btn.disabled = true;
+        try {
+          const updated = await postOptimize('/api/optimize/tweak', { id, optimized });
+          showOptToast(`Tweak "${updated.title}" -> ${updated.optimized ? 'Optimal (Aktif)' : 'Default (Nonaktif)'}.`);
+          await loadOptimizeStatus();
+        } catch (e) {
+          showOptToast('Gagal mengubah tweak: ' + e.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    const startups = optData.startup_items || [];
+    document.getElementById('opt-startup-list').innerHTML = startups.length
+      ? `<table><thead><tr><th>Aplikasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>` +
+        startups.map(s => `<tr>
+          <td><strong>${esc(s.name)}</strong><div class="mono">${esc(s.command)}</div></td>
+          <td><span class="badge ${s.enabled ? 'b-warn' : 'b-ok'}">${s.enabled ? 'Enabled' : 'Disabled'}</span></td>
+          <td><button class="btn" data-startup-name="${esc(s.name)}" data-next="${!s.enabled}">${s.enabled ? 'Disable' : 'Enable'}</button></td>
+        </tr>`).join('') + `</tbody></table>`
+      : '<div class="mono">Tidak ada entry di HKCU Run.</div>';
+
+    document.querySelectorAll('[data-startup-name]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.startupName;
+        const enabled = btn.dataset.next === 'true';
+        btn.disabled = true;
+        try {
+          await postOptimize('/api/optimize/startup', { name, enabled });
+          showOptToast(`Startup "${name}" berhasil di-${enabled ? 'Enable' : 'Disable'}.`);
+          await loadOptimizeStatus();
+        } catch (e) {
+          showOptToast('Gagal mengubah startup: ' + e.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function renderProcessGroups() {
+    if (!tmData || !tmData.process_groups) return;
+    document.getElementById('opt-proc-groups').innerHTML = tmData.process_groups.map(g => `<tr>
+      <td><strong>${esc(g.name)}</strong></td>
+      <td>${g.count}</td>
+      <td>${g.cpu_percent.toFixed(1)}%</td>
+      <td>${g.memory_mb.toFixed(1)} MB</td>
+      <td>${g.protected
+        ? '<span class="badge b-muted">Protected</span>'
+        : `<button class="btn" style="border-color:var(--err);color:#fca5a5;" data-kill-group="${esc(g.name)}">End Group</button>`
+      }</td>
+    </tr>`).join('');
+
+    document.querySelectorAll('[data-kill-group]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.killGroup;
+        if (!confirm(`Tutup semua proses "${name}" sekarang? Data yang belum disimpan di aplikasi tersebut bisa hilang.`)) return;
+        btn.disabled = true;
+        try {
+          const res = await postOptimize('/api/optimize/kill-group', { name });
+          showOptToast(`Grup "${res.name}": ${res.killed_count} proses dihentikan${res.failed_count ? `, ${res.failed_count} gagal` : ''}.`);
+          await pollTaskManager();
+        } catch (e) {
+          showOptToast('Gagal menutup grup proses: ' + e.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function renderProcesses() {
+    if (!tmData) return;
+    const q = document.getElementById('proc-search').value.trim().toLowerCase();
+    const list = tmData.processes.filter(p =>
+      !q || p.name.toLowerCase().includes(q) || String(p.pid).includes(q)
+    );
+    list.sort((a, b) => {
+      const mul = procSort.dir === 'asc' ? 1 : -1;
+      if (procSort.key === 'name') return mul * a.name.localeCompare(b.name);
+      if (procSort.key === 'pid') return mul * (a.pid - b.pid);
+      if (procSort.key === 'mem') return mul * (a.memory_bytes - b.memory_bytes);
+      return mul * (a.cpu_percent - b.cpu_percent);
+    });
+    document.getElementById('tm-procs').innerHTML = list.slice(0, 50).map(p => `<tr>
+      <td class="mono">${p.pid}</td>
+      <td><strong>${esc(p.name)}</strong></td>
+      <td>${p.cpu_percent.toFixed(1)}%</td>
+      <td>${p.memory_mb.toFixed(1)} MB</td>
+    </tr>`).join('');
+  }
+
+  // Event listeners
+  document.getElementById('btn-rescan').addEventListener('click', () => loadHardware(true));
+  document.getElementById('btn-print').addEventListener('click', () => window.print());
+  document.getElementById('btn-export').addEventListener('click', () => {
+    if (!hwData) return;
+    const payload = { hardware: hwData, taskmanager: tmData };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `device-report-${hwData.hostname || 'pc'}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('dm-search').addEventListener('input', renderDeviceManager);
+  document.getElementById('dm-category').addEventListener('change', renderDeviceManager);
+  document.getElementById('dm-only-err').addEventListener('click', (e) => {
+    dmOnlyErr = !dmOnlyErr;
+    e.target.classList.toggle('primary', dmOnlyErr);
+    renderDeviceManager();
+  });
+  document.getElementById('dm-expand-all').addEventListener('click', (e) => {
+    dmExpandAll = !dmExpandAll;
+    e.target.textContent = dmExpandAll ? 'Tutup Semua' : 'Buka Semua';
+    renderDeviceManager();
+  });
+
+  document.getElementById('proc-search').addEventListener('input', renderProcesses);
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (procSort.key === k) procSort.dir = procSort.dir === 'desc' ? 'asc' : 'desc';
+      else { procSort.key = k; procSort.dir = (k === 'name' || k === 'pid') ? 'asc' : 'desc'; }
+      renderProcesses();
+    });
+  });
+
+  document.getElementById('tm-toggle').addEventListener('click', (e) => {
+    tmPaused = !tmPaused;
+    e.target.textContent = tmPaused ? 'Resume Polling' : 'Pause Polling';
+    if (!tmPaused) pollTaskManager();
+  });
+
+  document.getElementById('btn-opt-refresh').addEventListener('click', loadOptimizeStatus);
+  document.getElementById('btn-clean-temp').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    try {
+      const res = await postOptimize('/api/optimize/clean-temp');
+      showOptToast(`Berhasil menghapus ${res.deleted_files} file (${fmtBytes(res.freed_bytes)} dibebaskan, ${res.skipped_files} file aktif dilewati).`);
+      await loadOptimizeStatus();
+    } catch (err) {
+      showOptToast('Gagal membersihkan %TEMP%: ' + err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  loadHardware(false);
+  loadOptimizeStatus();
+  pollTaskManager();
+  tmTimer = setInterval(pollTaskManager, 1500);
+})();
+</script>
+</body>
+</html>
